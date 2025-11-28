@@ -1,0 +1,444 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Snake — Classic Arcade</title>
+  <meta name="description" content="Play Snake — keyboard and touch controls, high score saved locally. Ready for GitHub Pages." />
+  <style>
+    :root{
+      --bg:#081229;--panel:#0f1724;--accent:#00d1b2;--muted:#9aa8b2;--danger:#ff6b6b;--glass: rgba(255,255,255,0.04);
+      --ui-radius:14px; --pad:14px; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg),#041027);color:#e6f0f2}
+    .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px}
+    .card{width:100%;max-width:980px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);border-radius:18px;padding:20px;display:grid;grid-template-columns:360px 1fr;gap:18px;box-shadow:0 8px 30px rgba(2,6,23,0.6)}
+    header.game-header{display:flex;align-items:center;gap:12px}
+    .logo{height:54px;width:54px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#5ae3c9);display:flex;align-items:center;justify-content:center;color:#04262a;font-weight:700;font-size:20px}
+    h1{margin:0;font-size:20px}
+    p.lead{margin:6px 0 0;color:var(--muted);font-size:13px}
+
+    /* Left column: controls and stats */
+    .left{padding:16px;background:var(--panel);border-radius:12px;display:flex;flex-direction:column;gap:12px}
+    .viewport{background:var(--glass);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+    .stats{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .stat{background:rgba(255,255,255,0.02);padding:8px 10px;border-radius:10px;min-width:80px;text-align:center}
+    .stat .num{font-size:20px;font-weight:700}
+    .controls{display:flex;flex-direction:column;gap:8px}
+    .btn{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:10px;border-radius:10px;cursor:pointer}
+    .btn.primary{background:linear-gradient(90deg,var(--accent),#5ae3c9);color:#04262a;border:0}
+
+    /* Game screen */
+    .game-area{background:linear-gradient(180deg,#071226,#051622);border-radius:12px;padding:12px;display:flex;align-items:center;justify-content:center}
+    canvas{background:linear-gradient(180deg,#081a2b,#041021);display:block;border-radius:8px;max-width:100%;height:auto}
+
+    /* Right column: instructions and footer */
+    .right{display:flex;flex-direction:column;gap:12px}
+    .panel{background:var(--panel);padding:16px;border-radius:12px}
+    .kbd{display:inline-block;background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:8px;font-weight:700}
+
+    /* touch controls */
+    .touch-controls{display:none;gap:8px;justify-content:center}
+    .touch-controls button{width:60px;height:60px;border-radius:12px;border:0;background:rgba(255,255,255,0.03);font-size:20px}
+
+    footer.small{font-size:12px;color:var(--muted);text-align:center}
+
+    /* Responsive */
+    @media (max-width:900px){
+      .card{grid-template-columns:1fr;}
+      .left{order:2}
+      .right{order:1}
+    }
+    @media (max-width:640px){
+      .touch-controls{display:flex}
+      .controls .desktop-only{display:none}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" role="application" aria-label="Snake game">
+      <div class="left">
+        <div class="viewport">
+          <header class="game-header">
+            <div class="logo">S</div>
+            <div>
+              <h1>Snake — Classic Arcade</h1>
+              <p class="lead">Eat apples, grow longer. Avoid walls and yourself. Use arrows or WASD. Touch controls shown on mobile.</p>
+            </div>
+          </header>
+
+          <div class="game-area" aria-live="polite">
+            <canvas id="gameCanvas" width="540" height="540" role="img" aria-label="Snake game canvas"></canvas>
+          </div>
+
+          <div class="stats" aria-hidden="false">
+            <div class="stat">
+              <div class="num" id="score">0</div>
+              <div class="muted">Score</div>
+            </div>
+            <div class="stat">
+              <div class="num" id="highScore">0</div>
+              <div class="muted">High Score</div>
+            </div>
+            <div class="stat">
+              <div class="num" id="length">1</div>
+              <div class="muted">Length</div>
+            </div>
+            <div class="stat">
+              <div class="num" id="speed">1x</div>
+              <div class="muted">Speed</div>
+            </div>
+          </div>
+
+          <div class="controls">
+            <div style="display:flex;gap:8px">
+              <button class="btn primary" id="startBtn">Start / Restart</button>
+              <button class="btn" id="pauseBtn">Pause</button>
+              <button class="btn" id="soundBtn">Sound: On</button>
+            </div>
+
+            <div style="display:flex;gap:8px;align-items:center">
+              <label class="kbd">Difficulty</label>
+              <input type="range" id="speedRange" min="1" max="6" value="2">
+            </div>
+
+            <div class="touch-controls" id="touchControls" aria-hidden="true">
+              <button data-dir="up">↑</button>
+              <div style="display:flex;gap:8px">
+                <button data-dir="left">←</button>
+                <button data-dir="down">↓</button>
+                <button data-dir="right">→</button>
+              </div>
+            </div>
+
+            <div style="font-size:13px;color:var(--muted)">Controls: <span class="kbd">Arrow keys</span> or <span class="kbd">WASD</span></div>
+          </div>
+        </div>
+
+        <div class="panel" style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+          <div>
+            <strong id="status">Ready</strong>
+            <div style="font-size:12px;color:var(--muted)">Press Start to play</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:12px;color:var(--muted)">Built for GitHub Pages</div>
+            <div style="font-size:11px;color:var(--muted)">File: index.html</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="right">
+        <div class="panel">
+          <h3 style="margin:0 0 8px 0">How to play</h3>
+          <ol style="margin:0 0 8px 18px;color:var(--muted)">
+            <li>Start the game and steer the snake to eat apples.</li>
+            <li>Each apple increases your length and score.</li>
+            <li>Don't collide with walls or the snake's body.</li>
+          </ol>
+          <h4 style="margin:8px 0 4px 0">Tips</h4>
+          <ul style="margin:0 0 0 18px;color:var(--muted)">
+            <li>Use the speed slider for more challenge.</li>
+            <li>On mobile, use on-screen buttons below the controls.</li>
+            <li>High score is saved in your browser.</li>
+          </ul>
+        </div>
+
+        <div class="panel">
+          <h3 style="margin:0 0 8px 0">GitHub deployment</h3>
+          <div style="color:var(--muted);font-size:13px">
+            <p style="margin:0 0 8px 0">To host on GitHub Pages:</p>
+            <pre style="background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;margin:0;font-size:13px">git init
+git add index.html
+git commit -m "Add Snake game"
+git branch -M main
+git remote add origin &lt;your-repo-url&gt;
+git push -u origin main</pre>
+            <p style="margin:8px 0 0 0">Then enable GitHub Pages in repository settings and set site to serve from <code>main</code> branch (root). The game will be available at <code>https://&lt;username&gt;.github.io/&lt;repo&gt;</code>.</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3 style="margin:0 0 8px 0">Credits &amp; License</h3>
+          <div style="color:var(--muted);font-size:13px">This single-file game is provided under the MIT License. Use freely and modify as you like.</div>
+        </div>
+
+        <footer class="small">Made with ❤️ — open the file <code>index.html</code> or publish directly to GitHub Pages.</footer>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // Snake game implementation — compact but readable
+  (() => {
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const soundBtn = document.getElementById('soundBtn');
+    const scoreEl = document.getElementById('score');
+    const highScoreEl = document.getElementById('highScore');
+    const lengthEl = document.getElementById('length');
+    const speedEl = document.getElementById('speed');
+    const statusEl = document.getElementById('status');
+    const speedRange = document.getElementById('speedRange');
+    const touchControls = document.getElementById('touchControls');
+
+    // Game config
+    const GRID = 18; // cells per row/col
+    const CELL = Math.floor(canvas.width / GRID);
+
+    let snake = [{x: Math.floor(GRID/2), y: Math.floor(GRID/2)}];
+    let dir = {x:0,y:0};
+    let apple = null;
+    let score = 0;
+    let speed = parseInt(speedRange.value,10) || 2;
+    let intervalId = null;
+    let paused = false;
+    let gameOver = false;
+    let audioOn = true;
+
+    // audio simple beep generator
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = AudioCtx ? new AudioCtx() : null;
+    function beep(freq=440, duration=0.06, type='sine', vol=0.08){
+      if(!audioOn || !audioCtx) return;
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = type; o.frequency.value = freq;
+      g.gain.value = vol;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(); g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+      o.stop(audioCtx.currentTime + duration + 0.02);
+    }
+
+    function randCell(){
+      return {x: Math.floor(Math.random()*GRID), y: Math.floor(Math.random()*GRID)};
+    }
+
+    function placeApple(){
+      let tries=0;
+      do{
+        apple = randCell();
+        tries++;
+      }while(snake.some(s=>s.x===apple.x && s.y===apple.y) && tries<1000);
+    }
+
+    function reset(){
+      snake = [{x: Math.floor(GRID/2), y: Math.floor(GRID/2)}];
+      dir = {x:1,y:0};
+      score = 0; gameOver=false; paused=false;
+      speed = parseInt(speedRange.value,10)||2;
+      placeApple();
+      updateUI();
+      statusEl.textContent = 'Playing';
+      startLoop();
+    }
+
+    function updateUI(){
+      scoreEl.textContent = score;
+      lengthEl.textContent = snake.length;
+      speedEl.textContent = speed + 'x';
+      const hs = localStorage.getItem('snake_highscore') || 0;
+      highScoreEl.textContent = hs;
+    }
+
+    function saveHighScore(){
+      const prev = parseInt(localStorage.getItem('snake_highscore')||0,10);
+      if(score>prev) localStorage.setItem('snake_highscore', String(score));
+      updateUI();
+    }
+
+    function startLoop(){
+      if(intervalId) clearInterval(intervalId);
+      const base = 180; // ms
+      const ms = Math.max(40, base - (speed-1)*24);
+      intervalId = setInterval(tick, ms);
+    }
+
+    function tick(){
+      if(paused || gameOver) return;
+      // move
+      const head = {x: (snake[0].x + dir.x + GRID)%GRID, y: (snake[0].y + dir.y + GRID)%GRID};
+      // check collisions with self
+      if(snake.some(s=>s.x===head.x && s.y===head.y)){
+        // game over
+        gameOver = true; statusEl.textContent='Game Over'; saveHighScore(); beep(120,0.25,'sawtooth',0.12);
+        return;
+      }
+      snake.unshift(head);
+      // eat apple
+      if(apple && head.x===apple.x && head.y===apple.y){
+        score += 10 * speed;
+        placeApple();
+        beep(880,0.06,'square',0.06);
+      } else {
+        snake.pop();
+      }
+      updateUI();
+      draw();
+    }
+
+    function draw(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      // background grid subtle
+      ctx.fillStyle = '#041224';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+
+      // draw apple
+      if(apple){
+        drawCell(apple.x, apple.y, '#ff6b6b');
+        // little shine
+        const c = cellCenter(apple.x, apple.y);
+        ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.beginPath(); ctx.arc(c.x-4,c.y-6,6,0,Math.PI*2); ctx.fill();
+      }
+
+      // draw snake body
+      for(let i=snake.length-1;i>=0;i--){
+        const s = snake[i];
+        const shade = i===0? '#00ffd5' : '#00bfa0';
+        drawCell(s.x,s.y, shade, i===0);
+      }
+    }
+
+    function drawCell(cx,cy, color, isHead){
+      const x = cx*CELL, y = cy*CELL;
+      ctx.fillStyle = color; ctx.beginPath();
+      const pad = 6; // internal padding for rounded effect
+      ctx.roundRect(x+4,y+4,CELL-8,CELL-8,8);
+      ctx.fill();
+      if(isHead){
+        // eyes
+        const c = cellCenter(cx,cy);
+        ctx.fillStyle = '#04262a';
+        ctx.beginPath(); ctx.arc(c.x-6,c.y-6,3,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(c.x+6,c.y-6,3,0,Math.PI*2); ctx.fill();
+      }
+    }
+
+    // helper to draw rounded rect (polyfill for older ctx)
+    if(!CanvasRenderingContext2D.prototype.roundRect){
+      CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
+        if(typeof r==='undefined') r=6; const min = Math.min(w,h)/2; if(r>min) r=min;
+        this.beginPath(); this.moveTo(x+r,y); this.arcTo(x+w,y,x+w,y+h,r); this.arcTo(x+w,y+h,x,y+h,r); this.arcTo(x,y+h,x,y,r); this.arcTo(x,y,x+w,y,r); this.closePath();
+      };
+    }
+
+    function cellCenter(x,y){
+      return {x: Math.floor(x*CELL + CELL/2), y: Math.floor(y*CELL + CELL/2)};
+    }
+
+    // input handling
+    window.addEventListener('keydown', (e)=>{
+      if(e.key==='ArrowUp' || e.key==='w' || e.key==='W') setDir(0,-1);
+      if(e.key==='ArrowDown' || e.key==='s' || e.key==='S') setDir(0,1);
+      if(e.key==='ArrowLeft' || e.key==='a' || e.key==='A') setDir(-1,0);
+      if(e.key==='ArrowRight' || e.key==='d' || e.key==='D') setDir(1,0);
+      if(e.key===' '){ // space toggles pause
+        togglePause(); e.preventDefault();
+      }
+    });
+
+    function setDir(x,y){
+      // prevent reversing directly
+      if(snake.length>1 && snake[0].x+ x === snake[1].x && snake[0].y + y === snake[1].y) return;
+      dir = {x,y};
+    }
+
+    // touch buttons
+    touchControls.querySelectorAll('button').forEach(b=>{
+      b.addEventListener('pointerdown', ()=>{
+        const d = b.dataset.dir;
+        if(d==='up') setDir(0,-1);
+        if(d==='down') setDir(0,1);
+        if(d==='left') setDir(-1,0);
+        if(d==='right') setDir(1,0);
+      });
+    });
+
+    // UI hooks
+    startBtn.addEventListener('click', ()=>{ reset(); if(audioCtx && audioCtx.state==='suspended') audioCtx.resume(); });
+    pauseBtn.addEventListener('click', ()=>{ togglePause() });
+    soundBtn.addEventListener('click', ()=>{ audioOn = !audioOn; soundBtn.textContent = 'Sound: ' + (audioOn? 'On' : 'Off'); });
+    speedRange.addEventListener('input', ()=>{ speed = parseInt(speedRange.value,10); startLoop(); updateUI(); });
+
+    function togglePause(){
+      if(gameOver){ reset(); return; }
+      paused = !paused; statusEl.textContent = paused ? 'Paused' : 'Playing';
+    }
+
+    // initial setup
+    function init(){
+      // detect mobile for touch controls
+      const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints>0;
+      if(isTouch){ touchControls.style.display='flex'; touchControls.setAttribute('aria-hidden', 'false'); }
+      // load highscore
+      updateUI();
+      placeApple();
+      draw();
+    }
+
+    // responsiveness: adapt canvas size to container width
+    function adaptCanvas(){
+      const parent = canvas.parentElement;
+      const size = Math.min(parent.clientWidth - 20, 540);
+      canvas.width = size; canvas.height = size;
+      // recalc cell size
+      // CELL is const earlier — we compute scale by adjusting ctx transform instead
+      // but for simplicity we keep a fixed GRID and adjust cell pixel size
+      // so compute CELL based on canvas.width and GRID
+      // (we shadow CELL by setting a property)
+      canvas._cell = Math.floor(canvas.width / GRID);
+      // override draw helpers to use canvas._cell
+      // we'll rebind CELL from canvas._cell
+    }
+
+    // override CELL usage to use canvas._cell
+    Object.defineProperty(window, 'CELL', {get: ()=> Math.floor(canvas.width/GRID)});
+
+    // small animation frame draw wrapper to ensure crisp
+    function draw(){
+      const cell = Math.floor(canvas.width/GRID);
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = '#041224'; ctx.fillRect(0,0,canvas.width,canvas.height);
+      if(apple){
+        drawCellAt(apple.x, apple.y, '#ff6b6b');
+        const c = cellCenterAt(apple.x, apple.y);
+        ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.beginPath(); ctx.arc(c.x-4,c.y-6,Math.max(3,cell/10),0,Math.PI*2); ctx.fill();
+      }
+      for(let i=snake.length-1;i>=0;i--){
+        const s = snake[i];
+        const shade = i===0? '#00ffd5' : '#00bfa0';
+        drawCellAt(s.x, s.y, shade, i===0);
+      }
+    }
+    function drawCellAt(cx,cy,color,isHead){
+      const cell = Math.floor(canvas.width/GRID);
+      const x = cx*cell, y = cy*cell;
+      ctx.fillStyle = color; ctx.beginPath();
+      const r = Math.max(4, Math.floor(cell*0.15));
+      ctx.roundRect(x+Math.floor(cell*0.08), y+Math.floor(cell*0.08), cell - Math.floor(cell*0.16), cell - Math.floor(cell*0.16), r);
+      ctx.fill();
+      if(isHead){
+        const c = cellCenterAt(cx,cy);
+        ctx.fillStyle = '#04262a'; ctx.beginPath(); ctx.arc(c.x - Math.max(3,Math.floor(cell*0.08)), c.y - Math.max(3,Math.floor(cell*0.12)), Math.max(2,Math.floor(cell*0.06)),0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(c.x + Math.max(3,Math.floor(cell*0.08)), c.y - Math.max(3,Math.floor(cell*0.12)), Math.max(2,Math.floor(cell*0.06)),0,Math.PI*2); ctx.fill();
+      }
+    }
+    function cellCenterAt(x,y){ const cell = Math.floor(canvas.width/GRID); return {x: Math.floor(x*cell + cell/2), y: Math.floor(y*cell + cell/2)}; }
+
+    // expose a little debug on resize
+    window.addEventListener('resize', ()=>{ adaptCanvas(); draw(); });
+
+    // initialize
+    adaptCanvas(); init();
+
+    // start paused by default; pressing Start begins
+    statusEl.textContent = 'Ready';
+
+  })();
+  </script>
+</body>
+</html>
